@@ -2,9 +2,9 @@
 // @name         GitHub 返回顶部按钮
 // @name:en      GitHub Back-to-Top Button
 // @namespace    https://github.com/zyxn/github-to-top
-// @version      1.0.0
-// @description  在 GitHub 页面右下角添加一个图标按钮，点击后平滑滚动返回顶部；滚动超过一屏才显示。
-// @description:en Adds a back-to-top icon button at the bottom-right of GitHub pages. Click to smoothly scroll to top. Only visible after scrolling past one viewport.
+// @version      1.1.0
+// @description  在 GitHub 页面右下角添加一个图标按钮，点击后以「前快后慢」自定义动画滚动返回顶部；滚动超过半屏才显示。
+// @description:en Adds a back-to-top icon button at the bottom-right of GitHub pages. Click for a custom ease-out (fast-then-slow) scroll animation back to top. Only visible after scrolling past half a viewport.
 // @author       zyxn
 // @match        *://github.com/*
 // @icon         https://github.githubassets.com/favicons/favicon.svg
@@ -97,15 +97,52 @@
             || 0;
     }
 
-    function smoothScrollToTop() {
-        // 优先用原生 smooth（尊重用户系统设置）
-        const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        window.scrollTo({ top: 0, behavior: prefersReduced ? 'auto' : 'smooth' });
-        // 兜底：某些情况下 scrollTo 不生效
-        const start = getCurrentScroll();
-        if (start > 0 && getCurrentScroll() === start && document.documentElement) {
-            document.documentElement.scrollTop = 0;
+    /* 当前滚动动画的 RAF 句柄，用于打断重入 */
+    let activeFrame = null;
+
+    function cancelActiveScroll() {
+        if (activeFrame !== null) {
+            cancelAnimationFrame(activeFrame);
+            activeFrame = null;
         }
+    }
+
+    function smoothScrollToTop() {
+        cancelActiveScroll();
+
+        const startPos = getCurrentScroll();
+        if (startPos <= 0) return; // 已在顶部，无需滚动
+
+        // 尊重用户系统偏好：禁用动画时直接到顶
+        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+            window.scrollTo(0, 0);
+            return;
+        }
+
+        // 动画时长随距离自适应：250ms 起、每像素 +0.15ms，最长 600ms
+        // 距离越远滚得越久，但不会拖沓
+        const duration = Math.min(600, 250 + startPos * 0.15);
+        const startTime = (typeof performance !== 'undefined'
+            ? performance.now()
+            : Date.now());
+
+        // ease-out cubic：前快后慢，初段迅速上冲、末段缓慢收敛
+        const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
+
+        function step(now) {
+            const elapsed = now - startTime;
+            const progress = elapsed >= duration ? 1 : easeOutCubic(elapsed / duration);
+            // 剩余距离 = 起始位置 ×(1 - 进度)，配合 ease-out 实现「先快后慢」
+            const remaining = startPos * (1 - progress);
+            window.scrollTo(0, Math.round(remaining));
+            if (progress < 1) {
+                activeFrame = requestAnimationFrame(step);
+            } else {
+                activeFrame = null;
+            }
+        }
+
+        activeFrame = requestAnimationFrame(step);
     }
 
     /* ---------- 创建按钮 ---------- */
@@ -162,6 +199,10 @@
 
     window.addEventListener('scroll', onScroll, { passive: true });
     window.addEventListener('resize', onScroll, { passive: true });
+    // 用户手动滚动（滚轮 / 触屏）时打断进行中的回顶动画，避免抢屏
+    ['wheel', 'touchmove'].forEach((ev) => {
+        window.addEventListener(ev, cancelActiveScroll, { passive: true });
+    });
     updateVisibility();
 
     /* ---------- 兼容 GitHub pjax / turbo 导航 ----------

@@ -7,7 +7,7 @@
 ## 特性
 
 - 🎯 **右下角悬浮按钮**：44px 圆形，毛玻璃背景，自适应 GitHub 浅色/深色主题
-- ⬆️ **平滑滚动回顶部**：使用原生 `scrollTo({ behavior: 'smooth' })`，并自动尊重 `prefers-reduced-motion`
+- ⬆️ **平滑滚动回顶部**：`requestAnimationFrame` 自定义「前快后慢」ease-out 缓动，时长按距离自适应；自动尊重 `prefers-reduced-motion`
 - 👀 **智能显隐**：滚动超过半屏（最少 300px）才出现，带淡入 + 上移过渡动画
 - ♿ **无障碍**：带 `aria-label`、`title`、键盘聚焦轮廓
 - ⚡ **性能友好**：滚动用 `requestAnimationFrame` 节流
